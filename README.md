@@ -1,5 +1,6 @@
 # custom-video-player
-custom video player tamper monkey script override pages controls with mine.
+Standalone media player
+custom video player tampermonkey script override pages controls with mine.
 Works on youtube for now.
 
 todo:
