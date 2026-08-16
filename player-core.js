@@ -344,69 +344,81 @@
         }
     `;
 
-    const HTML = `
-        <div class="video-controls-overlay" id="videoControlsOverlay">
-            <div class="overlay-row overlay-row-main">
-                <div class="overlay-left">
-                    <button class="icon-btn" id="playBtn" title="Play/Pause (Space)">&#9654;</button>
-                    <button class="icon-btn" id="muteBtn" title="Mute (M)">&#128266;</button>
-                    <input type="range" id="volume" class="overlay-volume" min="0" max="1" step="0.01" value="1" />
-                </div>
+    // Builds one element via document.createElement + setAttribute/
+    // textContent — never innerHTML. This is the whole point: sites that
+    // enforce a Trusted Types CSP (YouTube included) throw a hard
+    // TypeError on ANY raw-string innerHTML assignment, no exceptions.
+    // createElement/appendChild/textContent aren't part of that
+    // restriction at all, so building the UI this way works regardless of
+    // what CSP a site has. attrs.text sets textContent; attrs.class sets
+    // the class; everything else is set via setAttribute.
+    function el(tag, attrs, children) {
+        const node = document.createElement(tag);
+        for (const key in (attrs || {})) {
+            if (key === 'text') node.textContent = attrs[key];
+            else if (key === 'class') node.className = attrs[key];
+            else node.setAttribute(key, attrs[key]);
+        }
+        (children || []).forEach((child) => node.appendChild(child));
+        return node;
+    }
 
-                <span class="time" id="currentTime">0:00</span>
-                <div class="overlay-seek-wrap">
-                    <input type="range" id="seek" min="0" max="100" value="0" step="0.1" />
-                    <div class="loop-marker" id="markerA"></div>
-                    <div class="loop-marker" id="markerB"></div>
-                </div>
-                <span class="time" id="duration">0:00</span>
-            </div>
+    function buildControlsUI() {
+        const playBtn = el('button', { class: 'icon-btn', id: 'playBtn', title: 'Play/Pause (Space)', text: '▶' });
+        const muteBtn = el('button', { class: 'icon-btn', id: 'muteBtn', title: 'Mute (M)', text: '🔊' });
+        const volumeSlider = el('input', { type: 'range', id: 'volume', class: 'overlay-volume', min: '0', max: '1', step: '0.01', value: '1' });
+        const overlayLeft = el('div', { class: 'overlay-left' }, [playBtn, muteBtn, volumeSlider]);
 
-            <div class="overlay-row overlay-row-secondary">
-                <div class="menu-wrap">
-                    <button class="overlay-btn" id="speedBtn" title="Playback speed">1&times;</button>
-                    <div class="popup-menu" id="speedMenu">
-                        <button class="popup-item" data-speed="0.25">0.25&times;</button>
-                        <button class="popup-item" data-speed="0.5">0.5&times;</button>
-                        <button class="popup-item" data-speed="0.75">0.75&times;</button>
-                        <button class="popup-item" data-speed="1">1&times;</button>
-                        <button class="popup-item" data-speed="1.25">1.25&times;</button>
-                        <button class="popup-item" data-speed="1.5">1.5&times;</button>
-                        <button class="popup-item" data-speed="2">2&times;</button>
-                    </div>
-                </div>
-                <button class="overlay-btn" id="pipBtn" title="Picture-in-Picture">PiP</button>
-                <button class="icon-btn" id="fullscreenBtn" title="Fullscreen (F)">&#9974;</button>
-            </div>
-        </div>
+        const currentTimeEl = el('span', { class: 'time', id: 'currentTime', text: '0:00' });
+        const seek = el('input', { type: 'range', id: 'seek', min: '0', max: '100', value: '0', step: '0.1' });
+        const markerA = el('div', { class: 'loop-marker', id: 'markerA' });
+        const markerB = el('div', { class: 'loop-marker', id: 'markerB' });
+        const seekWrap = el('div', { class: 'overlay-seek-wrap' }, [seek, markerA, markerB]);
+        const durationEl = el('span', { class: 'time', id: 'duration', text: '0:00' });
 
-        <div class="video-controls-top" id="videoControlsTop">
-            <div class="menu-wrap">
-                <button class="overlay-btn" id="loopBtn" title="A/B loop">Loop</button>
-                <div class="popup-menu popup-menu-down" id="loopMenu">
-                    <button class="popup-item" id="menuSetA">Set A</button>
-                    <button class="popup-item" id="menuSetB">Set B</button>
-                    <button class="popup-item" id="menuLoopToggle">Loop: Off</button>
-                </div>
-            </div>
-            <div class="menu-wrap">
-                <button class="overlay-btn" id="exportBtn" title="Export clip">Export</button>
-                <div class="popup-menu popup-menu-down popup-menu-wide" id="exportMenu">
-                    <div class="export-row">
-                        <button class="popup-item" id="menuSetStart">Set start</button>
-                        <input type="text" id="exportStartInput" class="export-time-input" value="0:00" />
-                    </div>
-                    <div class="export-row">
-                        <button class="popup-item" id="menuSetEnd">Set end</button>
-                        <input type="text" id="exportEndInput" class="export-time-input" value="0:00" />
-                    </div>
-                    <button class="popup-item export-cut-btn" id="exportCutBtn">Cut</button>
-                    <div class="export-status" id="exportStatus"></div>
-                </div>
-            </div>
-            <button class="icon-btn" id="screenshotBtn" title="Save current frame as image">&#128247;</button>
-        </div>
-    `;
+        const rowMain = el('div', { class: 'overlay-row overlay-row-main' }, [overlayLeft, currentTimeEl, seekWrap, durationEl]);
+
+        const speedBtn = el('button', { class: 'overlay-btn', id: 'speedBtn', title: 'Playback speed', text: '1×' });
+        const speedItems = ['0.25', '0.5', '0.75', '1', '1.25', '1.5', '2'].map((s) =>
+            el('button', { class: 'popup-item', 'data-speed': s, text: s + '×' })
+        );
+        const speedMenu = el('div', { class: 'popup-menu', id: 'speedMenu' }, speedItems);
+        const speedWrap = el('div', { class: 'menu-wrap' }, [speedBtn, speedMenu]);
+
+        const pipBtn = el('button', { class: 'overlay-btn', id: 'pipBtn', title: 'Picture-in-Picture', text: 'PiP' });
+        const fullscreenBtn = el('button', { class: 'icon-btn', id: 'fullscreenBtn', title: 'Fullscreen (F)', text: '⛶' });
+
+        const rowSecondary = el('div', { class: 'overlay-row overlay-row-secondary' }, [speedWrap, pipBtn, fullscreenBtn]);
+
+        const videoControlsOverlay = el('div', { class: 'video-controls-overlay', id: 'videoControlsOverlay' }, [rowMain, rowSecondary]);
+
+        const loopBtn = el('button', { class: 'overlay-btn', id: 'loopBtn', title: 'A/B loop', text: 'Loop' });
+        const menuSetA = el('button', { class: 'popup-item', id: 'menuSetA', text: 'Set A' });
+        const menuSetB = el('button', { class: 'popup-item', id: 'menuSetB', text: 'Set B' });
+        const menuLoopToggle = el('button', { class: 'popup-item', id: 'menuLoopToggle', text: 'Loop: Off' });
+        const loopMenu = el('div', { class: 'popup-menu popup-menu-down', id: 'loopMenu' }, [menuSetA, menuSetB, menuLoopToggle]);
+        const loopWrap = el('div', { class: 'menu-wrap' }, [loopBtn, loopMenu]);
+
+        const menuSetStart = el('button', { class: 'popup-item', id: 'menuSetStart', text: 'Set start' });
+        const exportStartInput = el('input', { type: 'text', id: 'exportStartInput', class: 'export-time-input', value: '0:00' });
+        const exportRow1 = el('div', { class: 'export-row' }, [menuSetStart, exportStartInput]);
+
+        const menuSetEnd = el('button', { class: 'popup-item', id: 'menuSetEnd', text: 'Set end' });
+        const exportEndInput = el('input', { type: 'text', id: 'exportEndInput', class: 'export-time-input', value: '0:00' });
+        const exportRow2 = el('div', { class: 'export-row' }, [menuSetEnd, exportEndInput]);
+
+        const exportCutBtn = el('button', { class: 'popup-item export-cut-btn', id: 'exportCutBtn', text: 'Cut' });
+        const exportStatus = el('div', { class: 'export-status', id: 'exportStatus' });
+        const exportMenu = el('div', { class: 'popup-menu popup-menu-down popup-menu-wide', id: 'exportMenu' }, [exportRow1, exportRow2, exportCutBtn, exportStatus]);
+        const exportBtn = el('button', { class: 'overlay-btn', id: 'exportBtn', title: 'Export clip', text: 'Export' });
+        const exportWrap = el('div', { class: 'menu-wrap' }, [exportBtn, exportMenu]);
+
+        const screenshotBtn = el('button', { class: 'icon-btn', id: 'screenshotBtn', title: 'Save current frame as image', text: '📷' });
+
+        const videoControlsTop = el('div', { class: 'video-controls-top', id: 'videoControlsTop' }, [loopWrap, exportWrap, screenshotBtn]);
+
+        return { videoControlsOverlay, videoControlsTop };
+    }
 
     // The z-index the floating overlay (and the video, during fake
     // fullscreen) needs to reliably sit above a host page's own content.
@@ -470,11 +482,11 @@
 
         const shadowRoot = overlayHost.attachShadow({ mode: 'open' });
         const styleEl = document.createElement('style');
-        styleEl.textContent = CSS;
+        styleEl.textContent = CSS; // .textContent on <style> isn't a Trusted Types sink — only innerHTML is
         shadowRoot.appendChild(styleEl);
-        const wrapperEl = document.createElement('div');
-        wrapperEl.innerHTML = HTML;
-        shadowRoot.appendChild(wrapperEl);
+        const ui = buildControlsUI();
+        shadowRoot.appendChild(ui.videoControlsOverlay);
+        shadowRoot.appendChild(ui.videoControlsTop);
 
         function $(id) {
             return shadowRoot.getElementById(id);
@@ -548,10 +560,11 @@
         }
         playBtn.addEventListener('click', togglePlay);
 
-        // Without a container, overlayHost sits directly on top of the
-        // video (position-synced below) and captures clicks itself, rather
-        // than the video, so the host page's own click-to-pause handler
-        // never also fires alongside ours.
+        // Best-effort without a container: listens on the video element
+        // directly, which works on simple sites but may not fire at all on
+        // sites whose own control layer visually sits on top of the raw
+        // <video> tag (common on heavily custom players) — an accepted
+        // limitation for now, not worth chasing with more DOM tricks.
         let videoClickTimer = null;
         interactionTarget.addEventListener('click', () => {
             if (videoClickTimer) {
@@ -647,13 +660,21 @@
         // fill in sync every rendered frame instead of waiting on
         // `timeupdate` (which only fires a few times a second). Also drives
         // the loop check and, without a container, the position sync.
+        let syncFrameCount = 0;
         function renderLoop() {
             if (destroyed) return; // declared further down, but this only ever runs async (next frame), after it's initialized
             if (!video.paused && !isScrubbing) {
                 updateTimeDisplay();
             }
             checkLoop();
-            if (!hasContainer) syncPosition();
+            if (!hasContainer) {
+                // getBoundingClientRect() forces a layout read, which is
+                // cheap in isolation but adds up fast on a DOM-heavy page —
+                // every 4th frame (~15fps) is still smooth enough to track
+                // scrolling/resizing without doing it 60 times a second.
+                syncFrameCount++;
+                if (syncFrameCount % 4 === 0) syncPosition();
+            }
             requestAnimationFrame(renderLoop);
         }
         requestAnimationFrame(renderLoop);
@@ -725,15 +746,48 @@
                 }, 2500);
             }
         }
-        interactionTarget.addEventListener('mousemove', showOverlay);
-        interactionTarget.addEventListener('mouseenter', () => { isHovering = true; });
-        interactionTarget.addEventListener('mouseleave', () => {
-            isHovering = false;
+
+        function hideOverlayIfIdle() {
             if (!video.paused && !isScrubbing && !anyMenuOpen) {
                 videoControlsOverlay.classList.remove('visible');
                 videoControlsTop.classList.remove('visible');
             }
-        });
+        }
+
+        let onDocumentMouseMove = null;
+        if (hasContainer) {
+            // Reliable DOM-based hover: nothing we don't control sits on
+            // top of our own stageEl.
+            interactionTarget.addEventListener('mousemove', showOverlay);
+            interactionTarget.addEventListener('mouseenter', () => { isHovering = true; });
+            interactionTarget.addEventListener('mouseleave', () => {
+                isHovering = false;
+                hideOverlayIfIdle();
+            });
+        } else {
+            // mouseenter/mouseleave on the video itself would miss entirely
+            // on sites whose own control layer sits visually on top of the
+            // raw <video> tag (very common) — the video would just never
+            // receive the event. Checking the cursor position against the
+            // video's tracked rect on every document-wide mousemove works
+            // regardless of what's actually on top, and — since this only
+            // reads position and never blocks/redirects the event — it
+            // can't interfere with the host page's own handling of that
+            // same mousemove either.
+            onDocumentMouseMove = (e) => {
+                const rect = video.getBoundingClientRect();
+                const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                    e.clientY >= rect.top && e.clientY <= rect.bottom;
+                if (inside) {
+                    isHovering = true;
+                    showOverlay();
+                } else if (isHovering) {
+                    isHovering = false;
+                    hideOverlayIfIdle();
+                }
+            };
+            document.addEventListener('mousemove', onDocumentMouseMove);
+        }
 
         // ============================================
         // SPEED / LOOP / EXPORT POPUP MENUS
@@ -979,6 +1033,8 @@
         // ============================================
         let fakeFullscreen = false;
         let videoOriginalStyle = '';
+        let videoOriginalParent = null;
+        let videoOriginalNextSibling = null;
 
         function toggleFullscreen() {
             if (hasContainer) {
@@ -990,14 +1046,54 @@
             fakeFullscreen = !fakeFullscreen;
             fullscreenBtn.classList.toggle('active', fakeFullscreen);
             if (fakeFullscreen) {
+                // Setting position:fixed;inset:0 alone isn't reliable: even
+                // when the computed style and getBoundingClientRect() both
+                // report a full-viewport box, verified against a real
+                // YouTube page, the video can still visually render at its
+                // normal in-page size — some ancestor is establishing a
+                // containing block for fixed-position descendants (CSS
+                // transform/filter/perspective/contain/content-visibility
+                // all do this) that traps the *actual paint*, even though
+                // the numbers looked right. Rather than trying to detect
+                // exactly which ancestor/property is responsible, this
+                // sidesteps the whole problem: move the video to be a
+                // direct child of <body> (recording exactly where it came
+                // from so it can go back on exit) — body itself is never
+                // going to have one of those properties. overlayHost is
+                // re-appended right after so it stays the later sibling
+                // (paints on top) even though both now sit at the same
+                // z-index.
+                videoOriginalParent = video.parentNode;
+                videoOriginalNextSibling = video.nextSibling;
                 videoOriginalStyle = video.getAttribute('style') || '';
+                document.body.appendChild(video);
+                document.body.appendChild(overlayHost);
                 video.style.setProperty('position', 'fixed', 'important');
                 video.style.setProperty('inset', '0', 'important');
                 video.style.setProperty('width', '100vw', 'important');
                 video.style.setProperty('height', '100vh', 'important');
                 video.style.setProperty('z-index', String(MAX_Z), 'important');
+                video.style.setProperty('margin', '0', 'important'); // inset:0 positions the margin edge, so leftover margin would still offset the box
+                // The video element's box genuinely does become full-
+                // viewport at this point (verified: getBoundingClientRect
+                // stayed rock-stable at the exact window size). But sites
+                // often set object-fit:contain on their video (to preserve
+                // aspect ratio instead of stretching) — verified this is
+                // true on YouTube — which letterboxes the actual picture
+                // inside that box. The letterbox gaps are only opaque if
+                // the element has a background; without one they're
+                // transparent, showing the page content underneath right
+                // through them, which looked exactly like "fullscreen
+                // isn't really covering the screen." Forcing black here is
+                // what actually fixes that.
+                video.style.setProperty('background', '#000', 'important');
             } else {
                 video.setAttribute('style', videoOriginalStyle);
+                if (videoOriginalNextSibling && videoOriginalNextSibling.parentNode === videoOriginalParent) {
+                    videoOriginalParent.insertBefore(video, videoOriginalNextSibling);
+                } else {
+                    videoOriginalParent.appendChild(video);
+                }
             }
             syncPosition(); // reflect the video's new (or restored) box immediately
         }
@@ -1064,6 +1160,7 @@
             destroyed = true;
             document.removeEventListener('click', onDocumentClick);
             document.removeEventListener('keydown', onDocumentKeydown);
+            if (onDocumentMouseMove) document.removeEventListener('mousemove', onDocumentMouseMove);
             overlayHost.remove();
         }
         return destroy;
